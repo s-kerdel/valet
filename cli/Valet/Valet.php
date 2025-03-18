@@ -8,9 +8,7 @@ class Valet
 {
     public $valetBin = BREW_PREFIX.'/bin/valet';
 
-    public function __construct(public CommandLine $cli, public Filesystem $files)
-    {
-    }
+    public function __construct(public CommandLine $cli, public Filesystem $files) {}
 
     /**
      * Symlink the Valet Bash script into the user's local bin.
@@ -38,7 +36,7 @@ class Valet
     public function onLatestVersion(string $currentVersion): bool
     {
         $url = 'https://api.github.com/repos/laravel/valet/releases/latest';
-        $response = json_decode((new Client())->get($url)->getBody());
+        $response = json_decode((new Client)->get($url)->getBody());
 
         return version_compare($currentVersion, trim($response->tag_name, 'v'), '>=');
     }

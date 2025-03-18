@@ -1,6 +1,61 @@
 # Release Notes
 
-## [Unreleased](https://github.com/laravel/valet/compare/v4.5.0...master)
+## [Unreleased](https://github.com/laravel/valet/compare/v4.8.3...master)
+
+## [v4.8.3](https://github.com/laravel/valet/compare/v4.8.2...v4.8.3) - 2025-02-28
+
+* Supports Laravel 12 by [@crynobone](https://github.com/crynobone) in https://github.com/laravel/valet/pull/1511
+
+## [v4.8.2](https://github.com/laravel/valet/compare/v4.8.1...v4.8.2) - 2024-12-20
+
+* Add the ability to renew the Certificate Authority certificate by [@adrum](https://github.com/adrum) in https://github.com/laravel/valet/pull/1498
+* Fixes bad regex for loopback replacement for Issue #1503 by [@mitchkramez](https://github.com/mitchkramez) in https://github.com/laravel/valet/pull/1504
+* Change latest php version to 8.4 by [@mischabraam](https://github.com/mischabraam) in https://github.com/laravel/valet/pull/1507
+* fix(entry-script): use correct php binary for proxy commands by [@saibotk](https://github.com/saibotk) in https://github.com/laravel/valet/pull/1510
+
+## [v4.8.1](https://github.com/laravel/valet/compare/v4.8.0...v4.8.1) - 2024-11-25
+
+* Add support for PHP 8.4 by [@SupianIDz](https://github.com/SupianIDz) in https://github.com/laravel/valet/pull/1499
+* Fix extra parameters for share tool, fixes #1494 by [@rcknr](https://github.com/rcknr) in https://github.com/laravel/valet/pull/1495
+* Update logo to support dark/light theme by [@milewski](https://github.com/milewski) in https://github.com/laravel/valet/pull/1497
+
+## [v4.8.0](https://github.com/laravel/valet/compare/v4.7.1...v4.8.0) - 2024-09-03
+
+* Add a new share tool, cloudflared by [@rcknr](https://github.com/rcknr) in https://github.com/laravel/valet/pull/1467
+
+## [v4.7.1](https://github.com/laravel/valet/compare/v4.7.0...v4.7.1) - 2024-06-25
+
+* Require Trusting CA when securing sites by [@adrum](https://github.com/adrum) in https://github.com/laravel/valet/pull/1488
+
+## [v4.7.0](https://github.com/laravel/valet/compare/v4.6.3...v4.7.0) - 2024-06-18
+
+* Trust CA Certificate only by [@adrum](https://github.com/adrum) in https://github.com/laravel/valet/pull/1463
+* Allow specifying php version to restart by [@N-Silbernagel](https://github.com/N-Silbernagel) in https://github.com/laravel/valet/pull/1469
+* Update KirbyValetDriver.php by [@Werbschaft](https://github.com/Werbschaft) in https://github.com/laravel/valet/pull/1471
+* fix: Warning: Constant VALET_* already defined in X by [@NickSdot](https://github.com/NickSdot) in https://github.com/laravel/valet/pull/1485
+* Add values() call to reset keys after modifying paths by [@adriaanzon](https://github.com/adriaanzon) in https://github.com/laravel/valet/pull/1477
+* Adding support for Nette Framework. by [@antonL95](https://github.com/antonL95) in https://github.com/laravel/valet/pull/1486
+
+## [v4.6.3](https://github.com/laravel/valet/compare/v4.6.2...v4.6.3) - 2024-05-21
+
+* add server name to valet.conf by [@Oleg339](https://github.com/Oleg339) in https://github.com/laravel/valet/pull/1458
+
+## [v4.6.2](https://github.com/laravel/valet/compare/v4.6.1...v4.6.2) - 2024-05-07
+
+* Add quotes around $PHP by [@drbyte](https://github.com/drbyte) in https://github.com/laravel/valet/pull/1473
+* Support Illuminate:11 and Symfony:7 by [@drbyte](https://github.com/drbyte) in https://github.com/laravel/valet/pull/1481
+* Ignore invalid paths by [@ahmedash95](https://github.com/ahmedash95) in https://github.com/laravel/valet/pull/1478
+
+## [v4.6.1](https://github.com/laravel/valet/compare/v4.6.0...v4.6.1) - 2024-01-01
+
+* Allow renew() to be called without parameters by [@drbyte](https://github.com/drbyte) in https://github.com/laravel/valet/pull/1465
+
+## [v4.6.0](https://github.com/laravel/valet/compare/v4.5.0...v4.6.0) - 2023-12-27
+
+* Bandage for 502 errors using Gettext/PostgreSQL/MongoDB by [@drbyte](https://github.com/drbyte) in https://github.com/laravel/valet/pull/1452
+* handle deprecated http2_push_preload conf for nginx >= 1.25.1 by [@OpJePl44tsm4n](https://github.com/OpJePl44tsm4n) in https://github.com/laravel/valet/pull/1451
+* Update "fetch-share-url" to pull correct URL for HTTPS tunnels, not just HTTP by [@rana01645](https://github.com/rana01645) in https://github.com/laravel/valet/pull/1460
+* added the ability to renew certs and view their expiration dates by [@adrum](https://github.com/adrum) in https://github.com/laravel/valet/pull/1461
 
 ## [v4.5.0](https://github.com/laravel/valet/compare/v4.4.1...v4.5.0) - 2023-10-10
 

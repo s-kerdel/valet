@@ -2,6 +2,7 @@
 
 use Illuminate\Container\Container;
 use Illuminate\Support\Collection;
+use PHPUnit\Framework\Attributes\DataProvider;
 use Valet\Brew;
 use Valet\CommandLine;
 use Valet\Filesystem;
@@ -316,7 +317,7 @@ class BrewTest extends Yoast\PHPUnitPolyfills\TestCases\TestCase
         $this->assertSame('Some output', resolve(Brew::class)->unlink('aformula'));
     }
 
-    public function test_getRunningServices_will_throw_exception_on_failure()
+    public function test_get_running_services_will_throw_exception_on_failure()
     {
         $this->expectException(DomainException::class);
 
@@ -331,7 +332,7 @@ class BrewTest extends Yoast\PHPUnitPolyfills\TestCases\TestCase
         resolve(Brew::class)->getRunningServices(true);
     }
 
-    public function test_getRunningServices_will_pass_to_brew_services_list_and_return_array()
+    public function test_get_running_services_will_pass_to_brew_services_list_and_return_array()
     {
         $cli = Mockery::mock(CommandLine::class);
         $cli->shouldReceive('runAsUser')->once()->withArgs([
@@ -349,7 +350,7 @@ class BrewTest extends Yoast\PHPUnitPolyfills\TestCases\TestCase
         ], array_values($result->all()));
     }
 
-    public function test_getAllRunningServices_will_return_both_root_and_user_services()
+    public function test_get_all_running_services_will_return_both_root_and_user_services()
     {
         $cli = Mockery::mock(CommandLine::class);
         $cli->shouldReceive('run')->once()->withArgs([
@@ -369,7 +370,7 @@ class BrewTest extends Yoast\PHPUnitPolyfills\TestCases\TestCase
         ], array_values($result->all()));
     }
 
-    public function test_getAllRunningServices_will_return_unique_services()
+    public function test_get_all_running_services_will_return_unique_services()
     {
         $cli = Mockery::mock(CommandLine::class);
         $cli->shouldReceive('run')->once()->andReturn('service1'.PHP_EOL.'service2'.PHP_EOL.'service1'.PHP_EOL);
@@ -388,6 +389,7 @@ class BrewTest extends Yoast\PHPUnitPolyfills\TestCases\TestCase
     /**
      * @dataProvider supportedPhpLinkPathProvider
      */
+    #[DataProvider('supportedPhpLinkPathProvider')]
     public function test_get_parsed_linked_php_will_return_matches_for_linked_php($path, $matches)
     {
         $getBrewMock = function ($filesystem) {
@@ -405,6 +407,7 @@ class BrewTest extends Yoast\PHPUnitPolyfills\TestCases\TestCase
     /**
      * @dataProvider supportedPhpLinkPathProvider
      */
+    #[DataProvider('supportedPhpLinkPathProvider')]
     public function test_get_linked_php_formula_will_return_linked_php_directory($path, $matches, $expectedLinkFormula)
     {
         $brewMock = Mockery::mock(Brew::class)->makePartial();
@@ -489,7 +492,7 @@ class BrewTest extends Yoast\PHPUnitPolyfills\TestCases\TestCase
     /**
      * Provider of php links and their expected split matches.
      */
-    public function supportedPhpLinkPathProvider(): array
+    public static function supportedPhpLinkPathProvider(): array
     {
         return [
             [

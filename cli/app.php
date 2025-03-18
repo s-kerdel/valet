@@ -33,11 +33,11 @@ if (file_exists(__DIR__.'/../vendor/autoload.php')) {
  */
 Container::setInstance(new Container);
 
-$version = '4.5.0';
+$version = '4.8.4';
 
 $app = new Application('Laravel Valet', $version);
 
-$app->setDispatcher($dispatcher = new EventDispatcher());
+$app->setDispatcher($dispatcher = new EventDispatcher);
 
 $dispatcher->addListener(
     ConsoleEvents::COMMAND,
@@ -46,6 +46,12 @@ $dispatcher->addListener(
     });
 
 Upgrader::onEveryRun();
+
+$share_tools = [
+    'cloudflared',
+    'expose',
+    'ngrok',
+];
 
 /**
  * Install Valet and any required services.
@@ -61,6 +67,7 @@ $app->command('install', function (OutputInterface $output) {
     output();
     DnsMasq::install(Configuration::read()['tld']);
     output();
+    Site::renew();
     Nginx::restart();
     output();
     Valet::symlinkToUsersBin();
@@ -278,13 +285,35 @@ if (is_dir(VALET_HOME_PATH)) {
     /**
      * Display all of the currently secured sites.
      */
-    $app->command('secured', function (OutputInterface $output) {
-        $sites = collect(Site::secured())->map(function ($url) {
-            return ['Site' => $url];
-        });
+    $app->command('secured [--expiring] [--days=] [--ca]', function (OutputInterface $output, $expiring = null, $days = 60, $ca = null) {
+        $now = (new Datetime)->add(new DateInterval('P'.$days.'D'));
+        $sites = collect(Site::securedWithDates($ca))
+            ->when($expiring, fn ($collection) => $collection->filter(fn ($row) => $row['exp'] < $now))
+            ->map(function ($row) {
+                return [
+                    'Site' => $row['site'],
+                    'Valid Until' => $row['exp']->format('Y-m-d H:i:s T'),
+                ];
+            })
+            ->when($expiring, fn ($collection) => $collection->sortBy('Valid Until'));
 
-        table(['Site'], $sites->all());
-    })->descriptions('Display all of the currently secured sites');
+        return table(['Site', 'Valid Until'], $sites->all());
+    })->descriptions('Display all of the currently secured sites', [
+        '--expiring' => 'Limits the results to only sites expiring within the next 60 days.',
+        '--days' => 'To be used with --expiring. Limits the results to only sites expiring within the next X days. Default is set to 60.',
+        '--ca' => 'Include the Certificate Authority certificate in the list of site certificates.',
+    ]);
+
+    /**
+     * Renews all domains with a trusted TLS certificate.
+     */
+    $app->command('renew [--expireIn=] [--ca]', function (OutputInterface $output, $expireIn = 368, $ca = null) {
+        Site::renew($expireIn, $ca);
+        Nginx::restart();
+    })->descriptions('Renews all domains with a trusted TLS certificate.', [
+        '--expireIn' => 'The amount of days the self signed certificate is valid for. Default is set to "368"',
+        '--ca' => 'Renew the Certificate Authority certificate before renewing the site certificates.',
+    ]);
 
     /**
      * Create an Nginx proxy config for the specified domain.
@@ -357,83 +386,59 @@ if (is_dir(VALET_HOME_PATH)) {
     /**
      * Echo the currently tunneled URL.
      */
-    $app->command('fetch-share-url [domain]', function ($domain = null) {
+    $app->command('fetch-share-url [domain]', function ($domain = null) use ($share_tools) {
         $tool = Configuration::read()['share-tool'] ?? null;
 
-        switch ($tool) {
-            case 'expose':
-                if ($url = Expose::currentTunnelUrl($domain ?: Site::host(getcwd()))) {
-                    output($url);
-                }
-                break;
-            case 'ngrok':
-                try {
-                    output(Ngrok::currentTunnelUrl(Site::domain($domain)));
-                } catch (\Throwable $e) {
-                    warning($e->getMessage());
-                }
-            break;
-            default:
-                info('Please set your share tool with `valet share-tool expose` or `valet share-tool ngrok`.');
+        if ($tool && in_array($tool, $share_tools) && class_exists($tool)) {
+            try {
+                output($tool::currentTunnelUrl(Site::domain($domain)));
+            } catch (\Throwable $e) {
+                warning($e->getMessage());
+            }
+        } else {
+            info('Please set your share tool with `valet share-tool`.');
 
-                return Command::FAILURE;
+            return Command::FAILURE;
         }
-    })->descriptions('Get the URL to the current share tunnel (for Expose or ngrok)');
+    })->descriptions('Get the URL to the current share tunnel');
 
     /**
      * Echo or set the name of the currently-selected share tool (either "ngrok" or "expose").
      */
-    $app->command('share-tool [tool]', function (InputInterface $input, OutputInterface $output, $tool = null) {
+    $app->command('share-tool [tool]', function (InputInterface $input, OutputInterface $output, $tool = null) use ($share_tools) {
         if ($tool === null) {
             return output(Configuration::read()['share-tool'] ?? '(not set)');
         }
 
-        if ($tool !== 'expose' && $tool !== 'ngrok') {
-            warning($tool.' is not a valid share tool. Please use `ngrok` or `expose`.');
+        $share_tools_list = preg_replace('/,\s([^,]+)$/', ' or $1',
+            implode(', ', array_map(fn ($t) => "`$t`", $share_tools)));
+
+        if (! in_array($tool, $share_tools) || ! class_exists($tool)) {
+            warning("$tool is not a valid share tool. Please use $share_tools_list.");
 
             return Command::FAILURE;
         }
 
         Configuration::updateKey('share-tool', $tool);
-        info('Share tool set to '.$tool.'.');
+        info("Share tool set to $tool.");
 
-        if ($tool === 'expose') {
-            if (Expose::installed()) {
-                // @todo: Check it's the right version (has /api/tunnels/)
-                // E.g. if (Expose::installedVersion)
-                // if (version_compare(Expose::installedVersion(), $minimumExposeVersion) < 0) {
-                // prompt them to upgrade
-                return;
-            }
-
+        if (! $tool::installed()) {
             $helper = $this->getHelperSet()->get('question');
-            $question = new ConfirmationQuestion('Would you like to install Expose now? [y/N] ', false);
+            $question = new ConfirmationQuestion(
+                'Would you like to install '.ucfirst($tool).' now? [y/N] ',
+                false);
 
             if ($helper->ask($input, $output, $question) === false) {
-                info('Proceeding without installing Expose.');
+                info('Proceeding without installing '.ucfirst($tool).'.');
 
                 return;
             }
 
-            Expose::ensureInstalled();
-
-            return;
+            $tool::ensureInstalled();
         }
 
-        if (! Ngrok::installed()) {
-            info("\nIn order to share with ngrok, you'll need a version\nof ngrok installed and managed by Homebrew.");
-            $helper = $this->getHelperSet()->get('question');
-            $question = new ConfirmationQuestion('Would you like to install ngrok via Homebrew now? [y/N] ', false);
-
-            if ($helper->ask($input, $output, $question) === false) {
-                info('Proceeding without installing ngrok.');
-
-                return;
-            }
-
-            Ngrok::ensureInstalled();
-        }
-    })->descriptions('Get the name of the current share tool (Expose or ngrok).');
+        return Command::SUCCESS;
+    })->descriptions('Get the name of the current share tool.');
 
     /**
      * Set the ngrok auth token.
@@ -493,6 +498,13 @@ if (is_dir(VALET_HOME_PATH)) {
                 PhpFpm::restart();
 
                 return info('PHP has been restarted.');
+        }
+
+        // Handle restarting specific PHP version (e.g. `valet restart php@8.2`)
+        if (str_contains($service, 'php')) {
+            PhpFpm::restart($normalized = PhpFpm::normalizePhpVersion($service));
+
+            return info($normalized.' has been restarted.');
         }
 
         return warning(sprintf('Invalid valet service name [%s]', $service));

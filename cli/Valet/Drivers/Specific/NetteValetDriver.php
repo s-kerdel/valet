@@ -4,25 +4,17 @@ namespace Valet\Drivers\Specific;
 
 use Valet\Drivers\ValetDriver;
 
-class NeosValetDriver extends ValetDriver
+class NetteValetDriver extends ValetDriver
 {
     /**
      * Determine if the driver serves the request.
      */
     public function serves(string $sitePath, string $siteName, string $uri): bool
     {
-        return file_exists($sitePath.'/flow') && is_dir($sitePath.'/Web');
-    }
-
-    /**
-     * Take any steps necessary before loading the front controller for this driver.
-     */
-    public function beforeLoading(string $sitePath, string $siteName, string $uri): void
-    {
-        putenv('FLOW_CONTEXT=Development');
-        putenv('FLOW_REWRITEURLS=1');
-        $_SERVER['SCRIPT_FILENAME'] = $sitePath.'/Web/index.php';
-        $_SERVER['SCRIPT_NAME'] = '/index.php';
+        return file_exists($sitePath.'/www/index.php')
+            && file_exists($sitePath.'/www/.htaccess')
+            && file_exists($sitePath.'/config/common.neon')
+            && file_exists($sitePath.'/config/services.neon');
     }
 
     /**
@@ -30,7 +22,7 @@ class NeosValetDriver extends ValetDriver
      */
     public function isStaticFile(string $sitePath, string $siteName, string $uri)/* : string|false */
     {
-        if ($this->isActualFile($staticFilePath = $sitePath.'/Web'.$uri)) {
+        if ($this->isActualFile($staticFilePath = $sitePath.'/www/'.$uri)) {
             return $staticFilePath;
         }
 
@@ -42,6 +34,11 @@ class NeosValetDriver extends ValetDriver
      */
     public function frontControllerPath(string $sitePath, string $siteName, string $uri): ?string
     {
-        return $sitePath.'/Web/index.php';
+        $_SERVER['DOCUMENT_ROOT'] = $sitePath.'/www';
+        $_SERVER['SCRIPT_FILENAME'] = $sitePath.'/www/index.php';
+        $_SERVER['SCRIPT_NAME'] = '/index.php';
+        $_SERVER['PHP_SELF'] = '/index.php';
+
+        return $sitePath.'/www/index.php';
     }
 }

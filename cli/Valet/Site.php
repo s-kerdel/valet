@@ -2,15 +2,14 @@
 
 namespace Valet;
 
+use DateTime;
 use DomainException;
 use Illuminate\Support\Collection;
 use PhpFpm;
 
 class Site
 {
-    public function __construct(public Brew $brew, public Configuration $config, public CommandLine $cli, public Filesystem $files)
-    {
-    }
+    public function __construct(public Brew $brew, public Configuration $config, public CommandLine $cli, public Filesystem $files) {}
 
     /**
      * Get the name of the site.
@@ -399,7 +398,7 @@ class Site
 
         $lookups = [];
         $lookups[] = '~#?listen .*:80; # valet loopback~';
-        $lookups[] = '~#?listen .*:443 ssl http2; # valet loopback~';
+        $lookups[] = '~#?listen .*:443 ssl; # valet loopback~';
         $lookups[] = '~#?listen .*:60; # valet loopback~';
 
         foreach ($lookups as $lookup) {
@@ -435,6 +434,40 @@ class Site
             })->unique()->values()->all();
     }
 
+    /**
+     * Get all of the URLs with expiration dates that are currently secured.
+     */
+    public function securedWithDates($ca = false): array
+    {
+        $sites = collect($this->secured())->map(function ($site) {
+            $filePath = $this->certificatesPath().'/'.$site.'.crt';
+
+            $expiration = $this->cli->run("openssl x509 -enddate -noout -in $filePath");
+
+            $expiration = str_replace('notAfter=', '', $expiration);
+
+            return [
+                'site' => $site,
+                'exp' => new DateTime($expiration),
+            ];
+        })->unique()->values();
+
+        if ($ca) {
+            $filePath = $this->caPath('LaravelValetCASelfSigned.pem');
+
+            $expiration = $this->cli->run("openssl x509 -enddate -noout -in $filePath");
+
+            $expiration = str_replace('notAfter=', '', $expiration);
+
+            $sites->prepend([
+                'site' => 'Certificate Authority',
+                'exp' => new DateTime($expiration),
+            ]);
+        }
+
+        return $sites->all();
+    }
+
     public function isSecured(string $site): bool
     {
         $tld = $this->config->read()['tld'];
@@ -457,16 +490,17 @@ class Site
         // Extract in order to later preserve custom PHP version config when securing
         $phpVersion = $this->customPhpVersion($url);
 
-        $this->unsecure($url);
-
+        // Create the CA if it doesn't exist.
+        // If the user cancels the trust operation, the old certificate will not be removed.
         $this->files->ensureDirExists($this->caPath(), user());
+
+        $this->unsecure($url);
 
         $this->files->ensureDirExists($this->certificatesPath(), user());
 
         $this->files->ensureDirExists($this->nginxPath(), user());
 
-        $caExpireInDate = (new \DateTime())->diff(new \DateTime("+{$caExpireInYears} years"));
-
+        $caExpireInDate = (new \DateTime)->diff(new \DateTime("+{$caExpireInYears} years"));
         if (! $this->letstalkKeyFile() || ! $this->letstalkCrtFile()) {
             $this->createCa($caExpireInDate->format('%a'));
         }
@@ -483,6 +517,23 @@ class Site
     }
 
     /**
+     * Renews all domains with a trusted TLS certificate.
+     */
+    public function renew($expireIn = 368, $ca = false): void
+    {
+        if ($ca) {
+            $this->removeCa();
+        }
+        collect($this->securedWithDates())->each(function ($row) use ($expireIn) {
+            $url = $this->domain($row['site']);
+
+            $this->secure($url, null, $expireIn);
+
+            info('The ['.$url.'] site has been secured with a fresh TLS certificate.');
+        });
+    }
+
+    /**
      * If CA and root certificates are nonexistent, create them and trust the root cert.
      *
      * @param  int  $caExpireInDays  The number of days the self signed certificate authority is valid.
@@ -493,6 +544,15 @@ class Site
         $caKeyPath = $this->caPath('LaravelValetCASelfSigned.key');
 
         if ($this->files->exists($caKeyPath) && $this->files->exists($caPemPath)) {
+
+            $isTrusted = $this->cli->run(sprintf(
+                'security verify-cert -c "%s"', $caPemPath
+            ));
+
+            if (strpos($isTrusted, '...certificate verification successful.') === false) {
+                $this->trustCa($caPemPath);
+            }
+
             return;
         }
 
@@ -582,8 +642,6 @@ class Site
                 $caExpireInDays, $caPemPath, $caKeyPath, $caSrlParam, $csrPath, $crtPath, $confPath
             ));
         }
-
-        $this->trustCertificate($crtPath);
     }
 
     /**
@@ -610,9 +668,14 @@ class Site
      */
     public function trustCa(string $caPemPath): void
     {
-        $this->cli->run(sprintf(
-            'sudo security add-trusted-cert -d -r trustRoot -k /Library/Keychains/System.keychain "%s"', $caPemPath
+        info('Trusting Laravel Valet Certificate Authority...');
+        $result = $this->cli->run(sprintf(
+            'sudo security add-trusted-cert -d -r trustRoot -k /Library/Keychains/System.keychain "%s"',
+            $caPemPath
         ));
+        if ($result) {
+            throw new DomainException('The Certificate Authority must be trusted. Please run the command again.');
+        }
     }
 
     /**
@@ -640,8 +703,11 @@ class Site
     public function buildSecureNginxServer(string $url, ?string $siteConf = null): string
     {
         if ($siteConf === null) {
+            $nginxVersion = str_replace('nginx version: nginx/', '', exec('nginx -v 2>&1'));
+            $configFile = version_compare($nginxVersion, '1.25.1', '>=') ? 'secure.valet.conf' : 'secure.valet-legacy.conf';
+
             $siteConf = $this->replaceOldLoopbackWithNew(
-                $this->files->getStub('secure.valet.conf'),
+                $this->files->getStub($configFile),
                 'VALET_LOOPBACK',
                 $this->valetLoopback()
             );
@@ -783,8 +849,11 @@ class Site
                 $proxyUrl .= '.'.$tld;
             }
 
+            $nginxVersion = str_replace('nginx version: nginx/', '', exec('nginx -v 2>&1'));
+            $configFile = version_compare($nginxVersion, '1.25.1', '>=') ? 'secure.proxy.valet.conf' : 'secure.proxy.valet-legacy.conf';
+
             $siteConf = $this->replaceOldLoopbackWithNew(
-                $this->files->getStub($secure ? 'secure.proxy.valet.conf' : 'proxy.valet.conf'),
+                $this->files->getStub($secure ? $configFile : 'proxy.valet.conf'),
                 'VALET_LOOPBACK',
                 $this->valetLoopback()
             );

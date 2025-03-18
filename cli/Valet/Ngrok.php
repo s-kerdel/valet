@@ -13,14 +13,12 @@ class Ngrok
         'http://127.0.0.1:4041/api/tunnels',
     ];
 
-    public function __construct(public CommandLine $cli, public Brew $brew)
-    {
-    }
+    public function __construct(public CommandLine $cli, public Brew $brew) {}
 
     /**
      * Get the current tunnel URL from the Ngrok API.
      */
-    public function currentTunnelUrl(?string $domain = null): string
+    public function currentTunnelUrl(string $domain): string
     {
         // wait a second for ngrok to start before attempting to find available tunnels
         sleep(1);
@@ -28,7 +26,7 @@ class Ngrok
         foreach ($this->tunnelsEndpoints as $endpoint) {
             try {
                 $response = retry(20, function () use ($endpoint, $domain) {
-                    $body = json_decode((new Client())->get($endpoint)->getBody());
+                    $body = json_decode((new Client)->get($endpoint)->getBody());
 
                     if (isset($body->tunnels) && count($body->tunnels) > 0) {
                         if ($tunnelUrl = $this->findHttpTunnelUrl($body->tunnels, $domain)) {
@@ -51,20 +49,30 @@ class Ngrok
     }
 
     /**
-     * Find the HTTP tunnel URL from the list of tunnels.
+     * Find the HTTP/HTTPS tunnel URL from the list of tunnels.
      */
     public function findHttpTunnelUrl(array $tunnels, string $domain): ?string
     {
+        $httpTunnel = null;
+        $httpsTunnel = null;
+
         // If there are active tunnels on the Ngrok instance we will spin through them and
         // find the one responding on HTTP. Each tunnel has an HTTP and a HTTPS address
-        // but for local dev purposes we just desire the plain HTTP URL endpoint.
+        // if no HTTP tunnel is found we will return the HTTPS tunnel as a fallback.
+
+        // Iterate through tunnels to find both HTTP and HTTPS tunnels
         foreach ($tunnels as $tunnel) {
-            if ($tunnel->proto === 'http' && strpos($tunnel->config->addr, strtolower($domain))) {
-                return $tunnel->public_url;
+            if (stripos($tunnel->config->addr, $domain)) {
+                if ($tunnel->proto === 'http') {
+                    $httpTunnel = $tunnel->public_url;
+                } elseif ($tunnel->proto === 'https') {
+                    $httpsTunnel = $tunnel->public_url;
+                }
             }
         }
 
-        return null;
+        // Return HTTP tunnel if available; HTTPS tunnel if not; null if neither
+        return $httpTunnel ?? $httpsTunnel;
     }
 
     /**

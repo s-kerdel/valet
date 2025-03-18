@@ -17,7 +17,7 @@ class KirbyValetDriver extends ValetDriver
     /**
      * Determine if the incoming request is for a static file.
      */
-    public function isStaticFile(string $sitePath, string $siteName, string $uri)/*: string|false */
+    public function isStaticFile(string $sitePath, string $siteName, string $uri)/* : string|false */
     {
         if ($this->isActualFile($staticFilePath = $sitePath.$uri)) {
             return $staticFilePath;
@@ -46,6 +46,17 @@ class KirbyValetDriver extends ValetDriver
         if (preg_match('/^\/panel/', $uri) && $this->isActualFile($sitePath.'/panel/index.php')) {
             $scriptName = '/panel/index.php';
             $indexPath = $sitePath.'/panel/index.php';
+        }
+
+        // add this block
+        if (preg_match('/^\/(?!(kirby|site|content)\/).+\.php$/', $uri)) {
+            if (
+                $this->isActualFile($sitePath.$uri) ||
+                $isAboveWebroot && $this->isActualFile($sitePath.'/public'.$uri)
+            ) {
+                $scriptName = $uri;
+                $indexPath = $sitePath.$scriptName;
+            }
         }
 
         $sitePathPrefix = ($isAboveWebroot) ? $sitePath.'/public' : $sitePath;

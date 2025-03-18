@@ -1,6 +1,13 @@
 name: fix code styling
 
-on: [push]
+on:
+  push:
+    branches:
+      - master
+      - '*.x'
+
+permissions:
+  contents: write
 
 jobs:
   lint:

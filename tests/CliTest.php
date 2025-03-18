@@ -436,13 +436,34 @@ class CliTest extends BaseApplicationTestCase
         [$app, $tester] = $this->appAndTester();
 
         $site = Mockery::mock(RealSite::class);
-        $site->shouldReceive('secured')->andReturn(['tighten.test']);
+        $site->shouldReceive('securedWithDates')->andReturn([
+            [
+                'site' => 'tighten.test',
+                'exp' => new DateTime('Aug  2 13:16:40 2024 GMT'),
+            ],
+        ]);
         swap(RealSite::class, $site);
 
         $tester->run(['command' => 'secured']);
         $tester->assertCommandIsSuccessful();
 
         $this->assertStringContainsString('tighten.test', $tester->getDisplay());
+    }
+
+    public function test_renew_command()
+    {
+        [$app, $tester] = $this->appAndTester();
+
+        $site = Mockery::mock(RealSite::class);
+        $site->shouldReceive('renew')->andReturn();
+        swap(RealSite::class, $site);
+
+        $nginx = Mockery::mock(Nginx::class);
+        $nginx->shouldReceive('restart')->once();
+        swap(Nginx::class, $nginx);
+
+        $tester->run(['command' => 'renew']);
+        $tester->assertCommandIsSuccessful();
     }
 
     public function test_proxy_command()
@@ -753,6 +774,46 @@ class CliTest extends BaseApplicationTestCase
         $tester->assertCommandIsSuccessful();
 
         $this->assertStringContainsString('PHP has been restarted.', $tester->getDisplay());
+    }
+
+    public function test_restart_command_restarts_php_version()
+    {
+        [$app, $tester] = $this->appAndTester();
+
+        $phpfpm = Mockery::mock(PhpFpm::class);
+        $phpfpm->shouldReceive('normalizePhpVersion')
+            ->withArgs(['php@8.1'])
+            ->passthru()
+            ->once();
+        $phpfpm->shouldReceive('restart')->withArgs(['php@8.1'])->once();
+
+        swap(PhpFpm::class, $phpfpm);
+
+        $tester->run(['command' => 'restart', 'service' => 'php@8.1']);
+        $tester->assertCommandIsSuccessful();
+
+        $this->assertStringContainsString('php@8.1 has been restarted.', $tester->getDisplay());
+    }
+
+    public function test_restart_command_restarts_php_denormalized_version()
+    {
+        [$app, $tester] = $this->appAndTester();
+
+        $phpfpm = Mockery::mock(PhpFpm::class);
+        $phpfpm->shouldReceive('normalizePhpVersion')
+            ->withArgs(['php81'])
+            ->passthru()
+            ->once();
+        $phpfpm->shouldReceive('restart')
+            ->withArgs(['php@8.1'])
+            ->once();
+
+        swap(PhpFpm::class, $phpfpm);
+
+        $tester->run(['command' => 'restart', 'service' => 'php81']);
+        $tester->assertCommandIsSuccessful();
+
+        $this->assertStringContainsString('php@8.1 has been restarted.', $tester->getDisplay());
     }
 
     public function test_start_command()
